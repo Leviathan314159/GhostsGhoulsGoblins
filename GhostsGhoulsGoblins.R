@@ -16,6 +16,7 @@ ggg_train <- vroom(paste0(base_folder, "train.csv"))
 ggg_test <- vroom(paste0(base_folder, "test.csv"))
 ggg_missing_train <- vroom(paste0(base_folder, "trainWithMissingValues.csv"))
 glimpse(ggg_missing_train)
+glimpse(ggg_train)
 
 # Recipes ------------------------
 
@@ -64,3 +65,52 @@ ggsave(paste0(base_folder, "Imputation RMSE by Number of Neighbors.png"))
 k_val_frame |> slice_min(order_by = rmse_values, n = 3)
 
 # The best imputation value is k = 10, rmse = 0.13773
+
+# Recipe for Naive Bayes
+naive_recipe <- recipe(type ~ ., data = ggg_train) |> 
+  step_dummy(all_nominal_predictors()) |> 
+  step_normalize(all_numeric_predictors())
+
+
+# Naive Bayes ----------------------------
+
+# Set the model
+naive_model <- naive_Bayes(Laplace = tune(), smoothness = tune()) |>
+  set_mode("classification") |>
+  set_engine("naivebayes")
+
+# Set workflow
+naive_wf <- workflow() |>
+  add_recipe(naive_recipe) |>
+  add_model(naive_model)
+
+# Tuning
+# Set up the grid with the tuning values
+naive_grid <- grid_regular(Laplace(), smoothness())
+
+# Set up the K-fold CV
+naive_folds <- vfold_cv(data = ggg_train, v = 20, repeats = 1)
+
+# Find best tuning parameters
+naive_cv_results <- naive_wf |>
+  tune_grid(resamples = naive_folds,
+            grid = naive_grid,
+            metrics = metric_set(accuracy))
+
+# Select best tuning parameters
+naive_best_tune <- naive_cv_results |> select_best("accuracy")
+naive_final_wf <- naive_wf |>
+  finalize_workflow(naive_best_tune) |>
+  fit(data = ggg_train)
+
+# Make predictions
+naive_predictions <- predict(naive_final_wf, new_data = ggg_test, type = "class")
+naive_predictions
+
+# Prepare data for export
+naive_export <- data.frame("id" = ggg_test$id,
+                           "type" = naive_predictions$.pred_class)
+
+# Write the data
+vroom_write(naive_export, paste0(base_folder, "naive_bayes.csv"), delim = ",")
+
