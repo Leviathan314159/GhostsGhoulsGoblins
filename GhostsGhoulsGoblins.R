@@ -8,6 +8,8 @@ library(embed)
 library(ranger)
 library(discrim)
 library(themis) # for SMOTE
+library(bonsai)
+library(lightgbm)
 
 # Read in the data -----------------------
 
@@ -77,6 +79,16 @@ mlp_recipe <- recipe(type ~ ., data = ggg_train) |>
   step_mutate(color = as.factor(color)) |> 
   step_range(all_numeric_predictors(), min = 0, max = 1) # Scale to [0, 1]
 
+# Recipe for Boosted Trees
+boosted_recipe <- recipe(type ~ ., data = ggg_train) |> 
+  step_dummy(all_nominal_predictors()) |> 
+  step_normalize(all_numeric_predictors())
+
+# Recipe for BART
+bart_recipe <- recipe(type ~ ., data = ggg_train) |> 
+  step_dummy(all_nominal_predictors()) |> 
+  step_normalize(all_numeric_predictors())
+
 
 # Naive Bayes ----------------------------
 
@@ -121,49 +133,134 @@ mlp_recipe <- recipe(type ~ ., data = ggg_train) |>
 # vroom_write(naive_export, paste0(base_folder, "naive_bayes.csv"), delim = ",")
 
 # MLP ------------------------------
+# # Set the model
+# mlp_model <- mlp(hidden_units = tune(), 
+#                        epochs = 100) |> #,
+#                        # activation = "relu") |>
+#   set_engine("nnet") |> # If keras doesn't work, change engine to nnet
+#   set_mode("classification")
+# # Set workflow
+# mlp_wf <- workflow() |>
+#   add_recipe(mlp_recipe) |>
+#   add_model(mlp_model)
+# 
+# # Tuning
+# # Set up the grid with the tuning values
+# mlp_grid <- grid_regular(hidden_units(range = c(1, 15)),
+#                          levels = 15)
+# 
+# # Set up the K-fold CV
+# mlp_folds <- vfold_cv(data = ggg_train, v = 15, repeats = 1)
+# 
+# # Find best tuning parameters
+# mlp_cv_results <- mlp_wf |>
+#   tune_grid(resamples = mlp_folds,
+#             grid = mlp_grid,
+#             metrics = metric_set(accuracy))
+# 
+# # Plot the graph of tuned metrics
+# mlp_cv_results |> collect_metrics() |> filter(.metric == "accuracy") |> 
+#   ggplot(aes(x = hidden_units, y = mean)) + geom_line()
+# ggsave(paste0(base_folder, "Accuracy_vs_num_units.png"))
+# 
+# # Select best tuning parameters
+# mlp_best_tune <- mlp_cv_results |> select_best("accuracy")
+# mlp_final_wf <- mlp_wf |>
+#   finalize_workflow(mlp_best_tune) |>
+#   fit(data = ggg_train)
+# 
+# # Make predictions
+# mlp_predictions <- predict(mlp_final_wf, new_data = ggg_test, type = "class")
+# mlp_predictions
+# 
+# # Prepare data for export
+# mlp_export <- data.frame("id" = ggg_test$id,
+#                            "type" = mlp_predictions$.pred_class)
+# 
+# # Write the data
+# vroom_write(mlp_export, paste0(base_folder, "mlp.csv"), delim = ",")
+
+# Boosted Trees -----------------------------
+
 # Set the model
-mlp_model <- mlp(hidden_units = tune(), 
-                       epochs = 100) |> #,
-                       # activation = "relu") |>
-  set_engine("nnet") |> # If keras doesn't work, change engine to nnet
-  set_mode("classification")
+boosted_model <- boost_tree(tree_depth = tune(),
+                            trees = tune(),
+                            learn_rate = tune()) |>
+  set_mode("classification") |>
+  set_engine("lightgbm")
+
 # Set workflow
-mlp_wf <- workflow() |>
-  add_recipe(mlp_recipe) |>
-  add_model(mlp_model)
+boosted_wf <- workflow() |>
+  add_recipe(boosted_recipe) |>
+  add_model(boosted_model)
 
 # Tuning
 # Set up the grid with the tuning values
-mlp_grid <- grid_regular(hidden_units(range = c(1, 12)),
-                         levels = 3)
+boosted_grid <- grid_regular(tree_depth(), trees(), learn_rate())
 
 # Set up the K-fold CV
-mlp_folds <- vfold_cv(data = ggg_train, v = 15, repeats = 1)
+boosted_folds <- vfold_cv(data = ggg_train, v = 10, repeats = 1)
 
 # Find best tuning parameters
-mlp_cv_results <- mlp_wf |>
-  tune_grid(resamples = mlp_folds,
-            grid = mlp_grid,
+boosted_cv_results <- boosted_wf |>
+  tune_grid(resamples = boosted_folds,
+            grid = boosted_grid,
             metrics = metric_set(accuracy))
 
-# Plot the graph of tuned metrics
-mlp_cv_results |> collect_metrics() |> filter(.metric == "accuracy") |> 
-  ggplot(aes(x = hidden_units, y = mean)) + geom_line()
-ggsave(paste0(base_folder, "Accuracy_vs_num_units.png"))
-
 # Select best tuning parameters
-mlp_best_tune <- mlp_cv_results |> select_best("accuracy")
-mlp_final_wf <- mlp_wf |>
-  finalize_workflow(mlp_best_tune) |>
+boosted_best_tune <- boosted_cv_results |> select_best("accuracy")
+boosted_final_wf <- boosted_wf |>
+  finalize_workflow(boosted_best_tune) |>
   fit(data = ggg_train)
 
 # Make predictions
-mlp_predictions <- predict(mlp_final_wf, new_data = ggg_test, type = "class")
-mlp_predictions
+boosted_predictions <- predict(boosted_final_wf, new_data = ggg_test, type = "class")
+boosted_predictions
 
 # Prepare data for export
-mlp_export <- data.frame("id" = ggg_test$id,
-                           "type" = mlp_predictions$.pred_class)
+boosted_export <- data.frame("id" = ggg_test$id,
+                           "type" = boosted_predictions$.pred_class)
 
 # Write the data
-vroom_write(mlp_export, paste0(base_folder, "mlp.csv"), delim = ",")
+vroom_write(boosted_export, paste0(base_folder, "boosted_trees.csv"), delim = ",")
+
+# BART ----------------------------
+# Set the model
+bart_model <- bart(trees = tune()) |>
+  set_mode("classification") |>
+  set_engine("dbarts")
+
+# Set workflow
+bart_wf <- workflow() |>
+  add_recipe(bart_recipe) |>
+  add_model(bart_model)
+
+# Tuning
+# Set up the grid with the tuning values
+bart_grid <- grid_regular(trees())
+
+# Set up the K-fold CV
+bart_folds <- vfold_cv(data = ggg_train, v = 10, repeats = 1)
+
+# Find best tuning parameters
+bart_cv_results <- bart_wf |>
+  tune_grid(resamples = bart_folds,
+            grid = bart_grid,
+            metrics = metric_set(accuracy))
+
+# Select best tuning parameters
+bart_best_tune <- bart_cv_results |> select_best("accuracy")
+bart_final_wf <- bart_wf |>
+  finalize_workflow(bart_best_tune) |>
+  fit(data = ggg_train)
+
+# Make predictions
+bart_predictions <- predict(bart_final_wf, new_data = ggg_test, type = "class")
+bart_predictions
+
+# Prepare data for export
+bart_export <- data.frame("id" = ggg_test$id,
+                          "type" = bart_predictions$.pred_class)
+
+# Write the data
+vroom_write(bart_export, paste0(base_folder, "bart.csv"), delim = ",")
