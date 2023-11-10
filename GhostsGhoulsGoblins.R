@@ -70,8 +70,7 @@ num_trees <- 1000
 
 # Recipe for Naive Bayes
 naive_recipe <- recipe(type ~ ., data = ggg_train) |> 
-  step_lencode_mixed(all_nominal_predictors(), outcome = vars(type)) |> 
-  step_normalize(all_numeric_predictors())
+  step_lencode_glm(all_nominal_predictors(), outcome = vars(type))
 
 # Recipe for MLP
 mlp_recipe <- recipe(type ~ ., data = ggg_train) |> 
@@ -93,7 +92,7 @@ bart_recipe <- recipe(type ~ ., data = ggg_train) |>
 # Principal Component Analysis Recipes
 threshold_value <- 0.7
 pca_tree_recipe <- recipe(type ~ ., data = ggg_train) |> 
-  step_lencode_mixed(all_nominal_predictors(), outcome = vars(type)) |> 
+  step_lencode_glm(all_nominal_predictors(), outcome = vars(type)) |> 
   step_normalize(all_predictors()) |> 
   step_pca(all_predictors(), threshold = threshold_value)
 
