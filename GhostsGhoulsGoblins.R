@@ -70,7 +70,7 @@ num_trees <- 1000
 
 # Recipe for Naive Bayes
 naive_recipe <- recipe(type ~ ., data = ggg_train) |> 
-  step_dummy(all_nominal_predictors()) |> 
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(type)) |> 
   step_normalize(all_numeric_predictors())
 
 # Recipe for MLP
@@ -89,48 +89,55 @@ bart_recipe <- recipe(type ~ ., data = ggg_train) |>
   step_dummy(all_nominal_predictors()) |> 
   step_normalize(all_numeric_predictors())
 
+# Recipe for PCA Random Forest
+# Principal Component Analysis Recipes
+threshold_value <- 0.7
+pca_tree_recipe <- recipe(type ~ ., data = ggg_train) |> 
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(type)) |> 
+  step_normalize(all_predictors()) |> 
+  step_pca(all_predictors(), threshold = threshold_value)
 
 # Naive Bayes ----------------------------
 
-# # Set the model
-# naive_model <- naive_Bayes(Laplace = tune(), smoothness = tune()) |>
-#   set_mode("classification") |>
-#   set_engine("naivebayes")
-# 
-# # Set workflow
-# naive_wf <- workflow() |>
-#   add_recipe(naive_recipe) |>
-#   add_model(naive_model)
-# 
-# # Tuning
-# # Set up the grid with the tuning values
-# naive_grid <- grid_regular(Laplace(), smoothness())
-# 
-# # Set up the K-fold CV
-# naive_folds <- vfold_cv(data = ggg_train, v = 20, repeats = 1)
-# 
-# # Find best tuning parameters
-# naive_cv_results <- naive_wf |>
-#   tune_grid(resamples = naive_folds,
-#             grid = naive_grid,
-#             metrics = metric_set(accuracy))
-# 
-# # Select best tuning parameters
-# naive_best_tune <- naive_cv_results |> select_best("accuracy")
-# naive_final_wf <- naive_wf |>
-#   finalize_workflow(naive_best_tune) |>
-#   fit(data = ggg_train)
-# 
-# # Make predictions
-# naive_predictions <- predict(naive_final_wf, new_data = ggg_test, type = "class")
-# naive_predictions
-# 
-# # Prepare data for export
-# naive_export <- data.frame("id" = ggg_test$id,
-#                            "type" = naive_predictions$.pred_class)
-# 
-# # Write the data
-# vroom_write(naive_export, paste0(base_folder, "naive_bayes.csv"), delim = ",")
+# Set the model
+naive_model <- naive_Bayes(Laplace = tune(), smoothness = tune()) |>
+  set_mode("classification") |>
+  set_engine("naivebayes")
+
+# Set workflow
+naive_wf <- workflow() |>
+  add_recipe(naive_recipe) |>
+  add_model(naive_model)
+
+# Tuning
+# Set up the grid with the tuning values
+naive_grid <- grid_regular(Laplace(), smoothness())
+
+# Set up the K-fold CV
+naive_folds <- vfold_cv(data = ggg_train, v = 20, repeats = 1)
+
+# Find best tuning parameters
+naive_cv_results <- naive_wf |>
+  tune_grid(resamples = naive_folds,
+            grid = naive_grid,
+            metrics = metric_set(accuracy))
+
+# Select best tuning parameters
+naive_best_tune <- naive_cv_results |> select_best("accuracy")
+naive_final_wf <- naive_wf |>
+  finalize_workflow(naive_best_tune) |>
+  fit(data = ggg_train)
+
+# Make predictions
+naive_predictions <- predict(naive_final_wf, new_data = ggg_test, type = "class")
+naive_predictions
+
+# Prepare data for export
+naive_export <- data.frame("id" = ggg_test$id,
+                           "type" = naive_predictions$.pred_class)
+
+# Write the data
+vroom_write(naive_export, paste0(base_folder, "naive_bayes.csv"), delim = ",")
 
 # MLP ------------------------------
 # # Set the model
@@ -181,86 +188,132 @@ bart_recipe <- recipe(type ~ ., data = ggg_train) |>
 # vroom_write(mlp_export, paste0(base_folder, "mlp.csv"), delim = ",")
 
 # Boosted Trees -----------------------------
-
-# Set the model
-boosted_model <- boost_tree(tree_depth = tune(),
-                            trees = tune(),
-                            learn_rate = tune()) |>
-  set_mode("classification") |>
-  set_engine("lightgbm")
-
-# Set workflow
-boosted_wf <- workflow() |>
-  add_recipe(boosted_recipe) |>
-  add_model(boosted_model)
-
-# Tuning
-# Set up the grid with the tuning values
-boosted_grid <- grid_regular(tree_depth(), trees(), learn_rate())
-
-# Set up the K-fold CV
-boosted_folds <- vfold_cv(data = ggg_train, v = 10, repeats = 1)
-
-# Find best tuning parameters
-boosted_cv_results <- boosted_wf |>
-  tune_grid(resamples = boosted_folds,
-            grid = boosted_grid,
-            metrics = metric_set(accuracy))
-
-# Select best tuning parameters
-boosted_best_tune <- boosted_cv_results |> select_best("accuracy")
-boosted_final_wf <- boosted_wf |>
-  finalize_workflow(boosted_best_tune) |>
-  fit(data = ggg_train)
-
-# Make predictions
-boosted_predictions <- predict(boosted_final_wf, new_data = ggg_test, type = "class")
-boosted_predictions
-
-# Prepare data for export
-boosted_export <- data.frame("id" = ggg_test$id,
-                           "type" = boosted_predictions$.pred_class)
-
-# Write the data
-vroom_write(boosted_export, paste0(base_folder, "boosted_trees.csv"), delim = ",")
+# 
+# # Set the model
+# boosted_model <- boost_tree(tree_depth = tune(),
+#                             trees = tune(),
+#                             learn_rate = tune()) |>
+#   set_mode("classification") |>
+#   set_engine("lightgbm")
+# 
+# # Set workflow
+# boosted_wf <- workflow() |>
+#   add_recipe(boosted_recipe) |>
+#   add_model(boosted_model)
+# 
+# # Tuning
+# # Set up the grid with the tuning values
+# boosted_grid <- grid_regular(tree_depth(), trees(), learn_rate())
+# 
+# # Set up the K-fold CV
+# boosted_folds <- vfold_cv(data = ggg_train, v = 10, repeats = 1)
+# 
+# # Find best tuning parameters
+# boosted_cv_results <- boosted_wf |>
+#   tune_grid(resamples = boosted_folds,
+#             grid = boosted_grid,
+#             metrics = metric_set(accuracy))
+# 
+# # Select best tuning parameters
+# boosted_best_tune <- boosted_cv_results |> select_best("accuracy")
+# boosted_final_wf <- boosted_wf |>
+#   finalize_workflow(boosted_best_tune) |>
+#   fit(data = ggg_train)
+# 
+# # Make predictions
+# boosted_predictions <- predict(boosted_final_wf, new_data = ggg_test, type = "class")
+# boosted_predictions
+# 
+# # Prepare data for export
+# boosted_export <- data.frame("id" = ggg_test$id,
+#                            "type" = boosted_predictions$.pred_class)
+# 
+# # Write the data
+# vroom_write(boosted_export, paste0(base_folder, "boosted_trees.csv"), delim = ",")
 
 # BART ----------------------------
-# Set the model
-bart_model <- bart(trees = tune()) |>
-  set_mode("classification") |>
-  set_engine("dbarts")
+# # Set the model
+# bart_model <- parsnip::bart(trees = tune()) |>
+#   set_mode("classification") |>
+#   set_engine("dbarts")
+# 
+# # Set workflow
+# bart_wf <- workflow() |>
+#   add_recipe(bart_recipe) |>
+#   add_model(bart_model)
+# 
+# # Tuning
+# # Set up the grid with the tuning values
+# bart_grid <- grid_regular(trees())
+# 
+# # Set up the K-fold CV
+# bart_folds <- vfold_cv(data = ggg_train, v = 10, repeats = 1)
+# 
+# # Find best tuning parameters
+# bart_cv_results <- bart_wf |>
+#   tune_grid(resamples = bart_folds,
+#             grid = bart_grid,
+#             metrics = metric_set(accuracy))
+# 
+# # Select best tuning parameters
+# bart_best_tune <- bart_cv_results |> select_best("accuracy")
+# bart_final_wf <- bart_wf |>
+#   finalize_workflow(bart_best_tune) |>
+#   fit(data = ggg_train)
+# 
+# # Make predictions
+# bart_predictions <- predict(bart_final_wf, new_data = ggg_test, type = "class")
+# bart_predictions
+# 
+# # Prepare data for export
+# bart_export <- data.frame("id" = ggg_test$id,
+#                           "type" = bart_predictions$.pred_class)
+# 
+# # Write the data
+# vroom_write(bart_export, paste0(base_folder, "bart.csv"), delim = ",")
 
-# Set workflow
-bart_wf <- workflow() |>
-  add_recipe(bart_recipe) |>
-  add_model(bart_model)
+# Random Forest ------------------
+pca_forest <- rand_forest(mtry = tune(),
+                             min_n = tune(),
+                             trees = 1000) |>
+  set_engine("ranger") |>
+  set_mode("classification")
 
-# Tuning
+# Create a workflow using the model and recipe
+pca_forest_wf <- workflow() |>
+  add_model(pca_forest) |>
+  add_recipe(pca_tree_recipe)
+
 # Set up the grid with the tuning values
-bart_grid <- grid_regular(trees())
+pca_forest_grid <- grid_regular(mtry(range = c(1, (length(ggg_train)-1))), min_n(), levels = 5)
 
 # Set up the K-fold CV
-bart_folds <- vfold_cv(data = ggg_train, v = 10, repeats = 1)
+pca_forest_folds <- vfold_cv(data = ggg_train, v = 10, repeats = 1)
 
 # Find best tuning parameters
-bart_cv_results <- bart_wf |>
-  tune_grid(resamples = bart_folds,
-            grid = bart_grid,
+forest_cv_results <- pca_forest_wf |>
+  tune_grid(resamples = pca_forest_folds,
+            grid = pca_forest_grid,
             metrics = metric_set(accuracy))
 
-# Select best tuning parameters
-bart_best_tune <- bart_cv_results |> select_best("accuracy")
-bart_final_wf <- bart_wf |>
-  finalize_workflow(bart_best_tune) |>
+# Finalize the workflow using the best tuning parameters and predict
+# The best parameters were mtry = 9 and min_n = 2
+
+# Find out the best tuning parameters
+best_forest_tune <- forest_cv_results |> select_best("roc_auc")
+
+# Use the best tuning parameters for the model
+forest_final_wf <- pca_forest_wf |>
+  finalize_workflow(best_forest_tune) |>
   fit(data = ggg_train)
 
-# Make predictions
-bart_predictions <- predict(bart_final_wf, new_data = ggg_test, type = "class")
-bart_predictions
+pca_forest_predictions <- predict(forest_final_wf,
+                                     new_data = ggg_test,
+                                     type = "class")
+pca_forest_predictions
 
-# Prepare data for export
-bart_export <- data.frame("id" = ggg_test$id,
-                          "type" = bart_predictions$.pred_class)
+forest_export <- data.frame("id" = ggg_test$id,
+                           "type" = pca_forest_predictions$.pred_class)
 
 # Write the data
-vroom_write(bart_export, paste0(base_folder, "bart.csv"), delim = ",")
+vroom_write(forest_export, paste0(base_folder, "random_forest_classification.csv"), delim =",")
