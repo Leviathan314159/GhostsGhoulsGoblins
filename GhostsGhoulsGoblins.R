@@ -299,7 +299,7 @@ forest_cv_results <- pca_forest_wf |>
 # The best parameters were mtry = 9 and min_n = 2
 
 # Find out the best tuning parameters
-best_forest_tune <- forest_cv_results |> select_best("roc_auc")
+best_forest_tune <- forest_cv_results |> select_best("accuracy")
 
 # Use the best tuning parameters for the model
 forest_final_wf <- pca_forest_wf |>
