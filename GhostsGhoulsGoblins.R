@@ -8,7 +8,7 @@ library(embed)
 library(ranger)
 library(discrim)
 library(themis) # for SMOTE
-library(bonsai)
+# library(bonsai)
 library(lightgbm)
 
 # Read in the data -----------------------
